@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"catalog-product/internal/model"
 
@@ -73,6 +74,10 @@ func (h *ProductHandler) DeleteProduct(c *gin.Context) {
 
 	err = h.service.DeleteProduct(c.Request.Context(), productID)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete product"})
 		return
 	}
@@ -87,7 +92,7 @@ func (h *ProductHandler) ListProducts(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pagination parameters"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pagination parameters: limit and page are required and must be valid"})
 		return
 	}
 

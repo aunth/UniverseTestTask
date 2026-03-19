@@ -1,8 +1,10 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"catalog-notification/internal/broker"
 
@@ -14,17 +16,26 @@ func main() {
 
 	rabbitURL := os.Getenv("RABBITMQ_URL")
 	if rabbitURL == "" {
-		log.Fatal("RABBITMQ_URL is not set")
+		slog.Error("RABBITMQ_URL is not set")
+		os.Exit(1)
 	}
 
 	consumer, err := broker.NewConsumer(rabbitURL)
 	if err != nil {
-		log.Fatalf("Failed to initialize consumer: %v", err)
+		slog.Error("Failed to initialize consumer", "error", err)
+		os.Exit(1)
 	}
 	defer consumer.Close()
 
-	log.Println("Notifications Service started...")
-	if err := consumer.Start(); err != nil {
-		log.Fatalf("Error reading from queue: %v", err)
-	}
+	go func() {
+		slog.Info("Notifications Service started...")
+		if err := consumer.Start(); err != nil {
+			slog.Error("Error reading from queue", "error", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	slog.Info("Shutting down Notifications Service...")
 }

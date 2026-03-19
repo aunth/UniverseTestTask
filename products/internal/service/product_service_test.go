@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"catalog-product/internal/metrics"
 	"catalog-product/internal/model"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -60,6 +62,8 @@ func TestProductService_CreateProduct(t *testing.T) {
 	name := "Test Product"
 	price := 99.99
 
+	initialCount := testutil.ToFloat64(metrics.ProductsCreated)
+
 	repo.On("Create", ctx, mock.AnythingOfType("*model.Product")).Return(nil)
 	broker.On("PublishProductCreated", ctx, mock.AnythingOfType("*model.Product")).Return(nil)
 
@@ -70,6 +74,9 @@ func TestProductService_CreateProduct(t *testing.T) {
 	assert.Equal(t, name, product.Name)
 	assert.Equal(t, price, product.Price)
 	repo.AssertExpectations(t)
+
+	newCount := testutil.ToFloat64(metrics.ProductsCreated)
+	assert.Equal(t, float64(1), newCount-initialCount, "ProductsCreated metric should increment by 1")
 }
 
 func TestProductService_DeleteProduct(t *testing.T) {
@@ -80,6 +87,8 @@ func TestProductService_DeleteProduct(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.New()
 
+	initialCount := testutil.ToFloat64(metrics.ProductsDeleted)
+
 	repo.On("Delete", ctx, id).Return(nil)
 	broker.On("PublishProductDeleted", ctx, id).Return(nil)
 
@@ -87,6 +96,9 @@ func TestProductService_DeleteProduct(t *testing.T) {
 
 	assert.NoError(t, err)
 	repo.AssertExpectations(t)
+
+	newCount := testutil.ToFloat64(metrics.ProductsDeleted)
+	assert.Equal(t, float64(1), newCount-initialCount, "ProductsDeleted metric should increment by 1")
 }
 
 func TestProductService_ListProducts(t *testing.T) {
@@ -125,4 +137,34 @@ func TestProductService_CreateProduct_Error(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, product)
 	assert.Contains(t, err.Error(), "db error")
+}
+
+func TestProductService_DeleteProduct_Error(t *testing.T) {
+	repo := new(MockRepository)
+	svc := NewProductService(repo, nil)
+
+	ctx := context.Background()
+	id := uuid.New()
+
+	repo.On("Delete", ctx, id).Return(errors.New("not found"))
+
+	err := svc.DeleteProduct(ctx, id)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestProductService_ListProducts_Error(t *testing.T) {
+	repo := new(MockRepository)
+	svc := NewProductService(repo, nil)
+
+	ctx := context.Background()
+	
+	repo.On("List", ctx, 10, 0).Return(nil, errors.New("db fault"))
+
+	products, err := svc.ListProducts(ctx, 10, 0)
+
+	assert.Error(t, err)
+	assert.Nil(t, products)
+	assert.Contains(t, err.Error(), "db fault")
 }

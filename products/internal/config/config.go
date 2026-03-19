@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -29,15 +29,18 @@ func LoadConfig() *Config {
 	}
 
 	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is not set")
+		slog.Error("DATABASE_URL is not set")
+		os.Exit(1)
 	}
 
 	if cfg.MigrationPath == "" {
-		log.Fatal("MIGRATION_PATH is not set")
+		slog.Error("MIGRATION_PATH is not set")
+		os.Exit(1)
 	}
 
 	if cfg.RabbitMQURL == "" {
-		log.Fatal("RABBITMQ_URL is not set")
+		slog.Error("RABBITMQ_URL is not set")
+		os.Exit(1)
 	}
 
 	return cfg

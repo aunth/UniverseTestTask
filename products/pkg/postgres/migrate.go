@@ -1,7 +1,7 @@
 package postgres
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -9,7 +9,7 @@ import (
 )
 
 func RunMigrations(dsn string, migrationsPath string) error {
-	log.Println("Running database migrations...")
+	slog.Info("Running database migrations...")
 	
 	m, err := migrate.New("file://"+migrationsPath, dsn)
 	if err != nil {
@@ -20,6 +20,6 @@ func RunMigrations(dsn string, migrationsPath string) error {
 		return err
 	}
 
-	log.Println("Migrations applied successfully")
+	slog.Info("Migrations applied successfully")
 	return nil
 }

@@ -2,7 +2,7 @@ package broker
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -48,10 +48,10 @@ func NewConsumer(url string) (*Consumer, error) {
 
 func (c *Consumer) Start() error {
 	q, err := c.channel.QueueDeclare(
-		"",
-		false,
-		false,
+		"catalog_notifications",
 		true,
+		false,
+		false,
 		false,
 		nil,
 	)
@@ -73,7 +73,7 @@ func (c *Consumer) Start() error {
 	msgs, err := c.channel.Consume(
 		q.Name,
 		"",
-		true,
+		false,
 		false,
 		false,
 		false,
@@ -83,10 +83,14 @@ func (c *Consumer) Start() error {
 		return fmt.Errorf("failed to start consuming: %w", err)
 	}
 
-	log.Println(" [*] Waiting for messages. To exit press CTRL+C")
+	slog.Info("Waiting for messages")
 
 	for d := range msgs {
-		log.Printf(" [x] RECEIVED MESSAGE: %s", d.Body)
+		slog.Info("RECEIVED MESSAGE", "body", string(d.Body))
+		
+		if err := d.Ack(false); err != nil {
+			slog.Error("Failed to acknowledge message", "error", err)
+		}
 	}
 
 	return nil

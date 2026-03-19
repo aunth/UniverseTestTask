@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"catalog-product/internal/model"
 
@@ -45,7 +45,7 @@ func NewRabbitMQBroker(url string) (*RabbitMQBroker, error) {
 		return nil, fmt.Errorf("failed to declare exchange: %w", err)
 	}
 
-	log.Println("Connected to RabbitMQ successfully")
+	slog.Info("Connected to RabbitMQ successfully")
 
 	return &RabbitMQBroker{
 		conn:    conn,
@@ -87,7 +87,7 @@ func (b *RabbitMQBroker) publishEvent(ctx context.Context, action string, data i
 		return fmt.Errorf("failed to publish message to RabbitMQ: %w", err)
 	}
 
-	log.Printf("Published event to RabbitMQ: %s", action)
+	slog.Info("Published event to RabbitMQ", "action", action)
 	return nil
 }
 

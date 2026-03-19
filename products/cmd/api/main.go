@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
+	"errors"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"catalog-product/internal/broker"
 	"catalog-product/internal/config"
@@ -35,17 +40,19 @@ func main() {
 }
 
 func setupDatabase(ctx context.Context, cfg *config.Config) *pgxpool.Pool {
-	log.Println("Starting database migrations...")
+	slog.Info("Starting database migrations...")
 	if err := postgres.RunMigrations(cfg.DatabaseURL, cfg.MigrationPath); err != nil && err.Error() != "no change" {
-		log.Fatalf("Failed to run migrations: %v", err)
+		slog.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Migrations applied successfully")
+	slog.Info("Migrations applied successfully")
 
 	dbPool, err := postgres.InitDatabase(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		slog.Error("Failed to connect to database", "error", err)
+		os.Exit(1)
 	}
-	log.Println("PostgreSQL connection established")
+	slog.Info("PostgreSQL connection established")
 
 	return dbPool
 }
@@ -53,7 +60,7 @@ func setupDatabase(ctx context.Context, cfg *config.Config) *pgxpool.Pool {
 func setupBroker(cfg *config.Config) *broker.RabbitMQBroker {
 	msgBroker, err := broker.NewRabbitMQBroker(cfg.RabbitMQURL)
 	if err != nil {
-		log.Printf("Failed to connect to RabbitMQ: %v\n", err)
+		slog.Error("Failed to connect to RabbitMQ", "error", err)
 		return nil
 	}
 	return msgBroker
@@ -79,8 +86,30 @@ func setupRouter(dbPool *pgxpool.Pool, msgBroker *broker.RabbitMQBroker) *gin.En
 
 func runServer(router *gin.Engine, port string) {
 	addr := ":" + port
-	log.Printf("Products Service started on port %s\n", port)
-	if err := router.Run(addr); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: router,
 	}
+
+	go func() {
+		slog.Info("Products Service started", "port", port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("Failed to start server", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	slog.Info("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("Server forced to shutdown", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("Server exiting")
 }
